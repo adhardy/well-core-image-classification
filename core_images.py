@@ -4,7 +4,7 @@ import numpy as np
 
 class CoreImages():
 
-    def __init__(self, core_photos, core_x, core_y, core_x_cm, slice_window, slice_step=None):
+    def __init__(self, core_photos, core_x, core_y, core_x_mm, slice_window, slice_step=None):
         """
         core_photos: a list of core image paths
         core_x: Tuple (x1,x2) of the x coordinates of the core trays
@@ -27,21 +27,20 @@ class CoreImages():
         self.core_photos = core_photos
         self.core_x = core_x
         self.core_y = core_y
-        self.core_x_cm = core_x_cm
+        self.core_x_mm = core_x_mm
         
-
         self.cores_per_image = len(self.core_y) #infer core per images from number of entries in core_y
 
         self.core_length = core_x[1] - core_x[0]
 
         self.paths = [] #stores paths of all photos, cores, slices
-        self.px_cm_conversion = core_x_cm / self.core_length #get conversion factor between pixels and cm
+        self.px_cm_conversion = core_x_mm / self.core_length #get conversion factor between pixels and cm
 
-    def px_to_cm(self, px):
+    def px_to_mm(self, px):
         """ Converts a number of pixels to a measurement in cm"""
         return px * self.px_cm_conversion
     
-    def cm_to_px(self, cm):
+    def mm_to_px(self, cm):
         """ Converts a measurment of cm to a number in pixels"""
         return cm / self.px_cm_conversion
 
@@ -75,7 +74,7 @@ class CoreImages():
                 slice_paths = []
                 while slice_right < core_width:
                     slice_img = core_img.crop((slice_left,0,slice_right,core_height))
-                    slice_path = f"{slice_dir}/{os.path.splitext(os.path.basename(core_photo))[0]}_{n_core}_{n_slice}.jpg"
+                    slice_path = f"{slice_dir}/{os.path.splitext(os.path.basename(core_photo))[0]}_{n_core}_{n_slice}_{{0:05.0f}}_{{1:05.0f}}.jpg".format(self.px_to_mm(slice_left)*10,self.px_to_mm(slice_right)*10)
                     slice_paths.append(slice_path)
                     slice_img.save(slice_path)
                     slice_img.close()
