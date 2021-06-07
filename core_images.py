@@ -86,8 +86,8 @@ class CoreImages():
 
                     # find the label for this slice
                     if labels:
-                        length_cm = max(self.px_to_mm(slice_left+self.slice_window/2),0) #add half the window size to find the label at the midpoint of the window
-                        label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= length_cm)].tail(1)["type"].values)
+                        depth_cm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
+                        label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_cm)].tail(1)["type"].values)
                         if len(label)>0:
                             label = label[0]
                         else:
