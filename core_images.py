@@ -1,6 +1,5 @@
 import os
-from PIL import Image 
-import numpy as np
+from PIL import Image
 import pandas as pd
 
 class CoreImages():
@@ -85,17 +84,23 @@ class CoreImages():
                 slice_paths = []
                 while slice_right < core_width:
 
-                    # find the labels for this slice
+                    # find the label for this slice
                     if labels:
                         length_cm = max(self.px_to_mm(slice_left+self.slice_window/2),0) #add half the window size to find the label at the midpoint of the window
-                        label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= length_cm)].tail(1)["type"].values)[0]
+                        label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= length_cm)].tail(1)["type"].values)
+                        if len(label)>0:
+                            label = label[0]
+                        else:
+                            label = "unlabelled"
 
+                    #crop and save the slice
                     slice_img = core_img.crop((slice_left,0,slice_right,core_height))
                     slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}_{{0:05.0f}}_{{1:05.0f}}_{label}.jpg".format(self.px_to_mm(slice_left)*10,self.px_to_mm(slice_right)*10)
                     slice_paths.append(slice_path)
                     slice_img.save(slice_path)
                     slice_img.close()
 
+                    # increment for next loop
                     n_slice += 1
                     slice_left += self.slice_step
                     slice_right += self.slice_step
