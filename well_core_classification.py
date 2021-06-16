@@ -24,7 +24,6 @@ def plot_confusion_matrix(conf_mat, label_names):
     fig.update_layout(xaxis = dict(categoryorder = 'category ascending'))
     fig.update_xaxes(title_text='Predicted Class')
     fig.update_yaxes(title_text='True Class')
-    fig.show()
     return fig
 
 def list_file_paths(dirs):
