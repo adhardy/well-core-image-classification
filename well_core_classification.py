@@ -179,8 +179,8 @@ class Runner():
 
             #output to tensorboard
             if self.summarywriter:
-                self.summarywriter.add_scalar("step_loss/training", loss, self.train_steps)
-                self.summarywriter.add_scalar("step_accuracy/training", step_accuracy, self.train_steps)
+                self.summarywriter.add_scalar("batch_loss/training", loss, self.train_steps)
+                self.summarywriter.add_scalar("batch_accuracy/training", step_accuracy, self.train_steps)
 
             yield step, loss
 
@@ -190,8 +190,8 @@ class Runner():
 
         #output to tensorboard
         if self.summarywriter:
-            self.summarywriter.add_scalar("batch_loss/training", self.metrics["train"]["loss"], epoch)
-            self.summarywriter.add_scalar("batch_accuracy/training", self.metrics["train"]["accuracy"], epoch)
+            self.summarywriter.add_scalar("epoch_loss/training", self.metrics["train"]["loss"], epoch)
+            self.summarywriter.add_scalar("epoch_accuracy/training", self.metrics["train"]["accuracy"], epoch)
 
         #run scheduler per epoch
         if self.epoch_scheduler:
@@ -219,8 +219,8 @@ class Runner():
 
                             #output to tensorboard
                 if self.summarywriter:
-                    self.summarywriter.add_scalar("step_loss/evaluation", loss, self.val_steps)
-                    self.summarywriter.add_scalar("step_accuracy/evaluation", step_accuracy, self.val_steps)
+                    self.summarywriter.add_scalar("batch_loss/evaluation", loss, self.val_steps)
+                    self.summarywriter.add_scalar("batch_accuracy/evaluation", step_accuracy, self.val_steps)
 
                 yield step, loss
 
@@ -230,8 +230,8 @@ class Runner():
 
         #output to tensorboard
         if self.summarywriter:
-            self.summarywriter.add_scalar("batch_loss/evaluation", self.metrics["val"]["loss"], epoch)
-            self.summarywriter.add_scalar("batch_accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
+            self.summarywriter.add_scalar("epoch_loss/evaluation", self.metrics["val"]["loss"], epoch)
+            self.summarywriter.add_scalar("epoch_accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
         print("Accuracy: {:.2f}%".format(self.metrics['val']['accuracy']*100))
 
         #if accuracy improves, save the model
@@ -260,8 +260,8 @@ class Runner():
             print(f"")
             #TRAIN
             for step, loss in self.train(dataloaders["train"], epoch):
-                print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item()}")
+                print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item():.3f}")
 
             #EVALUATE
             for step, loss in self.evaluate(dataloaders["val"], epoch):
-                print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item()}")
+                print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
