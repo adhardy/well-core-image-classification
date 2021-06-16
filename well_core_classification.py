@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import os
 from PIL import Image
 import numpy as np
-import plotly.figure_factory as ff
-from tqdm import tqdm
+import plotly.figure_factory as ff 
 
 def matplotlib_imshow(img, one_channel=False, normalized=False):
     """plot image tensors in matplotlib"""
@@ -154,7 +153,7 @@ class Runner():
         step = 0
         
         #loop over each sample
-        for X,y in tqdm(dataloader):
+        for X,y in dataloader:
             step+=1
             self.train_steps+=1
 
@@ -204,7 +203,7 @@ class Runner():
         step = 0
 
         with torch.no_grad():
-            for X,y in tqdm(dataloader):
+            for X,y in dataloader:
                 step+=1
                 self.val_steps+=1
 
