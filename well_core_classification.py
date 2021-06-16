@@ -121,7 +121,8 @@ class Runner():
         self.epoch_scheduler = epoch_scheduler
         self.batch_scheduler = batch_scheduler
         self.save_path = save_path
-
+        self.train_steps = 0
+        self.val_steps = 0
         self.best_accuracy = 0
 
         #TODO implement the class based metrics used int the AiCourse notebooks
@@ -149,11 +150,12 @@ class Runner():
         self.reset_metrics("train")
         #switch to train mode
         self.model.train()
-        train_step = 0
+        step = 0
         
         #loop over each sample
         for X,y in dataloader:
-            train_step+=1
+            step+=1
+            self.train_steps+=1
 
             X,y = X.to(self.device), y.to(self.device)
             outputs = self.model.forward(X)
@@ -166,7 +168,8 @@ class Runner():
             self.optimizer.zero_grad()
 
             y_pred = self.predict(outputs)
-            self.metrics["train"]["accuracy"] += accuracy(y_pred, y)
+            accuracy = accuracy(y_pred, y)
+            self.metrics["train"]["accuracy"] += accuracy
 
             #run scheduler per step
             if self.batch_scheduler:
@@ -174,16 +177,21 @@ class Runner():
             
             self.metrics["train"]["loss"] += loss
 
-            yield train_step, loss
+            #output to tensorboard
+            if self.summarywriter:
+                self.summarywriter.add_scalar("step_loss/training", loss, self.train_steps)
+                self.summarywriter.add_scalar("step_accuracy/training", accuracy, self.train_steps)
+
+            yield step, loss
 
         #calculate final metrics 
-        self.metrics["train"]["loss"] = self.metrics["train"]["loss"] / train_step
-        self.metrics["train"]["accuracy"] = self.metrics["train"]["accuracy"] / train_step
+        self.metrics["train"]["loss"] /= step
+        self.metrics["train"]["accuracy"] /= step
 
         #output to tensorboard
         if self.summarywriter:
-            self.summarywriter.add_scalar("loss/training", self.metrics["train"]["loss"], epoch)
-            self.summarywriter.add_scalar("accuracy/training", self.metrics["train"]["accuracy"], epoch)
+            self.summarywriter.add_scalar("batch_loss/training", self.metrics["train"]["loss"], epoch)
+            self.summarywriter.add_scalar("batch_accuracy/training", self.metrics["train"]["accuracy"], epoch)
 
         #run scheduler per epoch
         if self.epoch_scheduler:
@@ -192,11 +200,12 @@ class Runner():
     def evaluate(self, dataloader, epoch):
         self.reset_metrics("val")
         self.model.eval()
-        val_step = 0
+        step = 0
 
         with torch.no_grad():
             for X,y in dataloader:
-                val_step+=1
+                step+=1
+                self.val_steps+=1
 
                 X,y = X.to(self.device), y.to(self.device)
                 outputs = self.model.forward(X)
@@ -207,16 +216,21 @@ class Runner():
                 loss = self.criterion(outputs, y)
                 self.metrics["val"]["loss"] += loss
 
-                yield val_step, loss
+                            #output to tensorboard
+                if self.summarywriter:
+                    self.summarywriter.add_scalar("step_loss/evaluation", loss, self.train_steps)
+                    self.summarywriter.add_scalar("step_accuracy/evaluation", accuracy, self.train_steps)
+
+                yield step, loss
 
         #calculate final metrics 
-        self.metrics["val"]["loss"] = self.metrics["val"]["loss"] / val_step
-        self.metrics["val"]["accuracy"] = self.metrics["val"]["accuracy"] / val_step
+        self.metrics["val"]["loss"] /= step
+        self.metrics["val"]["accuracy"] /= step
 
         #output to tensorboard
         if self.summarywriter:
-            self.summarywriter.add_scalar("loss/evaluation", self.metrics["val"]["loss"], epoch)
-            self.summarywriter.add_scalar("accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
+            self.summarywriter.add_scalar("batch_loss/evaluation", self.metrics["val"]["loss"], epoch)
+            self.summarywriter.add_scalar("batch_accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
         print("Accuracy: {:.2f}%".format(self.metrics['val']['accuracy']*100))
 
         #if accuracy improves, save the model
