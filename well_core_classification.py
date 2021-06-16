@@ -168,8 +168,8 @@ class Runner():
             self.optimizer.zero_grad()
 
             y_pred = self.predict(outputs)
-            accuracy = accuracy(y_pred, y)
-            self.metrics["train"]["accuracy"] += accuracy
+            step_accuracy = accuracy(y_pred, y)
+            self.metrics["train"]["accuracy"] += step_accuracy
 
             #run scheduler per step
             if self.batch_scheduler:
@@ -180,7 +180,7 @@ class Runner():
             #output to tensorboard
             if self.summarywriter:
                 self.summarywriter.add_scalar("step_loss/training", loss, self.train_steps)
-                self.summarywriter.add_scalar("step_accuracy/training", accuracy, self.train_steps)
+                self.summarywriter.add_scalar("step_accuracy/training", step_accuracy, self.train_steps)
 
             yield step, loss
 
@@ -211,7 +211,8 @@ class Runner():
                 outputs = self.model.forward(X)
 
                 y_pred = self.predict(outputs)
-                self.metrics["val"]["accuracy"] += accuracy(y_pred, y)
+                step_accuracy = accuracy(y_pred, y)
+                self.metrics["val"]["accuracy"] += step_accuracy
 
                 loss = self.criterion(outputs, y)
                 self.metrics["val"]["loss"] += loss
@@ -219,7 +220,7 @@ class Runner():
                             #output to tensorboard
                 if self.summarywriter:
                     self.summarywriter.add_scalar("step_loss/evaluation", loss, self.train_steps)
-                    self.summarywriter.add_scalar("step_accuracy/evaluation", accuracy, self.train_steps)
+                    self.summarywriter.add_scalar("step_accuracy/evaluation", step_accuracy, self.train_steps)
 
                 yield step, loss
 
