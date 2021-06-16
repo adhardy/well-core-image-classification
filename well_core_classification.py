@@ -5,6 +5,7 @@ import os
 from PIL import Image
 import numpy as np
 import plotly.figure_factory as ff
+from tqdm import tqdm
 
 def matplotlib_imshow(img, one_channel=False, normalized=False):
     """plot image tensors in matplotlib"""
@@ -153,7 +154,7 @@ class Runner():
         step = 0
         
         #loop over each sample
-        for X,y in dataloader:
+        for X,y in tqdm(dataloader):
             step+=1
             self.train_steps+=1
 
@@ -203,7 +204,7 @@ class Runner():
         step = 0
 
         with torch.no_grad():
-            for X,y in dataloader:
+            for X,y in tqdm(dataloader):
                 step+=1
                 self.val_steps+=1
 
@@ -219,8 +220,8 @@ class Runner():
 
                             #output to tensorboard
                 if self.summarywriter:
-                    self.summarywriter.add_scalar("step_loss/evaluation", loss, self.train_steps)
-                    self.summarywriter.add_scalar("step_accuracy/evaluation", step_accuracy, self.train_steps)
+                    self.summarywriter.add_scalar("step_loss/evaluation", loss, self.val_steps)
+                    self.summarywriter.add_scalar("step_accuracy/evaluation", step_accuracy, self.val_steps)
 
                 yield step, loss
 
@@ -257,11 +258,15 @@ class Runner():
 
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
-            print(f"")
+            print(f"EPOCH: {epoch+1}")
             #TRAIN
+            print("Training:")
             for step, loss in self.train(dataloaders["train"], epoch):
-                print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item()}")
+              pass
+                #print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item()}")
 
             #EVALUATE
+            print("Evaluation:")
             for step, loss in self.evaluate(dataloaders["val"], epoch):
-                print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item()}")
+              pass
+                #print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item()}")
