@@ -257,15 +257,11 @@ class Runner():
 
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
-            print(f"EPOCH: {epoch+1}")
+            print(f"")
             #TRAIN
-            print("Training:")
             for step, loss in self.train(dataloaders["train"], epoch):
-              pass
-                #print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item()}")
+                print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item()}")
 
             #EVALUATE
-            print("Evaluation:")
             for step, loss in self.evaluate(dataloaders["val"], epoch):
-              pass
-                #print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item()}")
+                print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item()}")
