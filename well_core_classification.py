@@ -18,7 +18,7 @@ def matplotlib_imshow(img, one_channel=False, normalized=False):
     else:
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
-def plot_confusion_matrix(conf_mat, label_names):
+def plot_confusion_matrix(conf_mat, label_names, height=500, width=500):
     fig = ff.create_annotated_heatmap(conf_mat, x=label_names, y=label_names)
     fig.update_layout(yaxis = dict(categoryorder = 'category descending'))
     fig.update_layout(xaxis = dict(categoryorder = 'category ascending'))
@@ -26,8 +26,8 @@ def plot_confusion_matrix(conf_mat, label_names):
     fig.update_yaxes(title_text='True Class')
     fig.update_layout(
         autosize=False,
-        width=500,
-        height=500)
+        width=width,
+        height=height)
     return fig
 
 def list_file_paths(dirs):
