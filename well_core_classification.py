@@ -153,7 +153,7 @@ class Runner():
             train_step+=1
 
             X,y = X.to(self.device), y.to(self.device)
-            outputs = model.forward(X)
+            outputs = self.model.forward(X)
 
             # back prop
             loss = self.criterion(outputs, y)
@@ -178,7 +178,7 @@ class Runner():
         self.metrics["train"]["accuracy"] = self.metrics["train"]["accuracy"] / train_step
 
         #output to tensorboard
-        if summarywriter:
+        if self.summarywriter:
             self.summarywriter.add_scalar("loss/training", self.metrics["train"]["loss"], epoch)
             self.summarywriter.add_scalar("accuracy/training", self.metrics["train"]["accuracy"], epoch)
 
@@ -196,7 +196,7 @@ class Runner():
                 val_step+=1
 
                 X,y = X.to(self.device), y.to(self.device)
-                outputs = model.forward(X)
+                outputs = self.model.forward(X)
 
                 y_pred = self.predict(outputs)
                 self.metrics["val"]["accuracy"] += accuracy(y_pred, y)
@@ -211,14 +211,14 @@ class Runner():
         self.metrics["val"]["accuracy"] = self.metrics["val"]["accuracy"] / val_step
 
         #output to tensorboard
-        if summarywriter:
+        if self.summarywriter:
             self.summarywriter.add_scalar("loss/evaluation", self.metrics["val"]["loss"], epoch)
             self.summarywriter.add_scalar("accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
         print("Accuracy: {:.2f}%".format(self.metrics['val']['accuracy']*100))
 
         #if accuracy improves, save the model
         if self.save_path and (self.metrics['val']['accuracy'] > self.best_accuracy):
-          torch.save(model.state_dict(), self.save_path)
+          torch.save(self.model.state_dict(), self.save_path)
 
     def test(self, dataloader):
       self.model.eval()
@@ -229,7 +229,7 @@ class Runner():
         for X,y in dataloader:
             step += 1
             X,y = X.to(self.device), y.to(self.device)
-            outputs = model.forward(X)
+            outputs = self.model.forward(X)
 
             y_pred_step = list(self.predict(outputs))
             y_pred += y_pred_step
