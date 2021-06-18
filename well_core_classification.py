@@ -122,6 +122,9 @@ class Runner():
     optimizer: torch.nn.optim
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     device: torch.device
+    metrics: typing.Iterable[
+        typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    ]
     summarywrite=None: SummaryWriter
     epoch_scheduler=None: torch.optim.lr_scheduler
     batch_scheduler=None: torch.optim.lr_scheduler
@@ -129,33 +132,10 @@ class Runner():
 
     def __init__(self):
         self.model = self.model.to(device)
-        self.train_steps = 0
-        self.val_steps = 0
         self.best_accuracy = 0
 
-        #TODO implement the class based metrics used int the AiCourse notebooks
-        self.metrics = {
-            "train":{
-                "loss":0,
-                "accuracy":0
-            },
-            "val":{
-                "loss":0,
-                "accuracy":0
-            }
-        }
-
-    def predict(self, outputs):
-        return torch.argmax(outputs, dim=1)
-
-    def predict_proba(self, outputs):
-        return torch.nn.functional.softmax(outputs, dim=1)
-
-    def reset_metrics(self, mode:str):
-        self.metrics[mode]["accuracy"] = 0
-
     def train(self, dataloader, epoch):
-        self.reset_metrics("train")
+
         #switch to train mode
         self.model.train()
         step = 0
@@ -163,48 +143,32 @@ class Runner():
         #loop over each sample
         for X,y in dataloader:
             step+=1
-            #self.train_steps+=1
 
             X,y = X.to(self.device), y.to(self.device)
-            outputs = self.model.forward(X)
+            logits = self.model.forward(X)
 
             # back prop
-            loss = self.criterion(outputs, y)
+            loss = self.criterion(logits, y)
             loss.backward()
             
+            #step
             self.optimizer.step()
             self.optimizer.zero_grad()
-
-            y_pred = self.predict(outputs)
-            #step_accuracy = accuracy(y_pred, y)
-            #self.metrics["train"]["accuracy"] += step_accuracy
 
             #run scheduler per step
             if self.batch_scheduler:
                 self.batch_scheduler.step()
-            
-            #self.metrics["train"]["loss"] += loss
-
-            #output to tensorboard
-            if self.summarywriter:
-                self.metrics_to_summarywriter(self)
-                # self.summarywriter.add_scalar("batch_loss/training", loss, self.train_steps)
-                # self.summarywriter.add_scalar("batch_accuracy/training", step_accuracy, self.train_steps)
 
             yield step, loss
 
-        #calculate final metrics 
-        self.metrics["train"]["loss"] /= step
-        self.metrics["train"]["accuracy"] /= step
-
         #output to tensorboard
         if self.summarywriter:
-            self.summarywriter.add_scalar("epoch_loss/training", self.metrics["train"]["loss"], epoch)
-            self.summarywriter.add_scalar("epoch_accuracy/training", self.metrics["train"]["accuracy"], epoch)
+            self.evaluate_metrics(self, logits, y)
+            self.metrics_to_summarywriter(self, epoch, "train")
 
         #run scheduler per epoch
         if self.epoch_scheduler:
-                    self.epoch_scheduler.step()
+            self.epoch_scheduler.step()
     
     def evaluate(self, dataloader, epoch):
         self.reset_metrics("val")
@@ -214,38 +178,26 @@ class Runner():
         with torch.no_grad():
             for X,y in dataloader:
                 step+=1
-                self.val_steps+=1
 
                 X,y = X.to(self.device), y.to(self.device)
                 logits = self.model.forward(X)
 
-                y_pred = self.predict(logits)
-                step_accuracy = accuracy(y_pred, y)
-                self.metrics["val"]["accuracy"] += step_accuracy
-
                 loss = self.criterion(logits, y)
-                self.metrics["val"]["loss"] += loss
-
-                            #output to tensorboard
-                if self.summarywriter:
-                    self.summarywriter.add_scalar("batch_loss/evaluation", loss, self.val_steps)
-                    self.summarywriter.add_scalar("batch_accuracy/evaluation", step_accuracy, self.val_steps)
 
                 yield step, loss
 
-        #calculate final metrics 
-        self.metrics["val"]["loss"] /= step
-        self.metrics["val"]["accuracy"] /= step
-
         #output to tensorboard
+        self.evaluate_metrics(self, logits, y)
         if self.summarywriter:
-            self.summarywriter.add_scalar("epoch_loss/evaluation", self.metrics["val"]["loss"], epoch)
-            self.summarywriter.add_scalar("epoch_accuracy/evaluation", self.metrics["val"]["accuracy"], epoch)
-        print("Accuracy: {:.2f}%".format(self.metrics['val']['accuracy']*100))
+            self.metrics_to_summarywriter(self, epoch, "eval")
+
+        #metrics[0] = accuracy
+        print(f"Accuracy: {self.metrics[0].score*100:.2f}%")
 
         #if accuracy improves, save the model
-        if self.save_path and (self.metrics['val']['accuracy'] > self.best_accuracy):
-          torch.save(self.model.state_dict(), self.save_path)
+        if self.save_path and (self.metrics[0].score > self.best_accuracy):
+            self.best_accuracy = self.metrics[0].score
+            torch.save(self.model.state_dict(), self.save_path)
 
     def test(self, dataloader):
       self.model.eval()
@@ -256,9 +208,9 @@ class Runner():
         for X,y in dataloader:
             step += 1
             X,y = X.to(self.device), y.to(self.device)
-            outputs = self.model.forward(X)
+            logits = self.model.forward(X)
 
-            y_pred_step = list(self.predict(outputs))
+            y_pred_step = list(self.predict(logits))
             y_pred += y_pred_step
             test_accuracy += accuracy(torch.tensor(y_pred_step).to(self.device), y)
 
@@ -275,42 +227,36 @@ class Runner():
             for step, loss in self.evaluate(dataloaders["val"], epoch):
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
 
-    def feed_metrics(self, outputs, y):
+    def feed_metrics(self, logits, y):
         for metric in self.metrics:
-            metric(outputs, y)
+            metric(logits, y)
 
-    def print_metrics(self):
+    def evaluate_metrics(self, logits, y):
         for metric in self.metrics:
-            print(f"{metric.__class__.__name__}: {metric.evaluate()}")
+            metric.evaluate(logits, y)
 
-    def metrics_to_summarywriter(self, step: int, mode="train": str):
+    def metrics_to_summarywriter(self, step: int, mode="train"):
         for metric in self.metrics:
-            self.summarywriter.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.evaluate(), step)
-
-    def evaluate(self, dataloader):
-        self.model.eval()
-        with torch.no_grad():
-            for X, y in dataloader:
-                X, y = X.to(self.device), y.to(self.device)
-                outputs = self.model(X)
-                self.feed_metrics(outputs, y)
-        self.print_metrics()
+            self.summarywriter.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.score, step)
 
 class Metric(ABC):
     def __init__(self):
         self.cache = 0
         self.i = 0
+        self.score = 0 #stores the last evaluated metric score
 
     def __call__(self, logits, labels):
         self.i += 1
         self.cache += self.forward(logits.detach(), labels)
 
     def evaluate(self):
-        result = self.cache / self.i
+        score = self.cache / self.i
         self.cache = 0
         self.i = 0
-        return result
-    
+        self.score = score
+        return score
+
+
     @ABC.abstractmethod
     def forward(self):
         pass
