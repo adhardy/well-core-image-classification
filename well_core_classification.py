@@ -1,11 +1,10 @@
-# helper function to show an image
 import torch
 import matplotlib.pyplot as plt
 import os
 from PIL import Image
 import numpy as np
 import plotly.figure_factory as ff 
-from abc import ABC
+import abc
 import typing
 import dataclasses
 from torch.utils.tensorboard import SummaryWriter
@@ -119,19 +118,19 @@ def get_weights(modes, slices):
 @dataclasses.dataclass
 class Runner():
     model: torch.nn.Module
-    optimizer: torch.nn.optim
+    optimizer: torch.optim
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     device: torch.device
     metrics: typing.Iterable[
         typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     ]
-    summarywrite=None: SummaryWriter
-    epoch_scheduler=None: torch.optim.lr_scheduler
-    batch_scheduler=None: torch.optim.lr_scheduler
-    save_path = None: str
-
-    def __init__(self):
-        self.model = self.model.to(device)
+    save_path: str = None
+    batch_scheduler: torch.optim.lr_scheduler = None
+    epoch_scheduler: torch.optim.lr_scheduler = None
+    summary_writer: SummaryWriter = None
+        
+    def __post_init__(self):
+        self.model = self.model.to(self.device)
         self.best_accuracy = 0
 
     def train(self, dataloader, epoch):
@@ -191,7 +190,7 @@ class Runner():
         if self.summarywriter:
             self.metrics_to_summarywriter(self, epoch, "eval")
 
-        #metrics[0] = accuracy
+        #metrics[0] == accuracy
         print(f"Accuracy: {self.metrics[0].score*100:.2f}%")
 
         #if accuracy improves, save the model
@@ -239,7 +238,7 @@ class Runner():
         for metric in self.metrics:
             self.summarywriter.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.score, step)
 
-class Metric(ABC):
+class Metric(abc.ABC):
     def __init__(self):
         self.cache = 0
         self.i = 0
@@ -256,8 +255,7 @@ class Metric(ABC):
         self.score = score
         return score
 
-
-    @ABC.abstractmethod
+    @abc.abstractmethod
     def forward(self):
         pass
 
