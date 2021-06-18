@@ -5,6 +5,11 @@ import os
 from PIL import Image
 import numpy as np
 import plotly.figure_factory as ff 
+from abc import ABC
+import typing
+import dataclasses
+from torch.utils.tensorboard import SummaryWriter
+
 
 def matplotlib_imshow(img, one_channel=False, normalized=False):
     """plot image tensors in matplotlib"""
@@ -111,16 +116,19 @@ def get_weights(modes, slices):
     
     return weights
 
+@dataclasses.dataclass
 class Runner():
-    def __init__(self, model, optimizer, criterion, device, summarywriter=None, epoch_scheduler=None, batch_scheduler=None, save_path = None):
-        self.model = model.to(device)
-        self.optimizer = optimizer
-        self.criterion = criterion
-        self.device = device
-        self.summarywriter = summarywriter
-        self.epoch_scheduler = epoch_scheduler
-        self.batch_scheduler = batch_scheduler
-        self.save_path = save_path
+    model: torch.nn.Module
+    optimizer: torch.nn.optim
+    criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    device: torch.device
+    summarywrite=None: SummaryWriter
+    epoch_scheduler=None: torch.optim.lr_scheduler
+    batch_scheduler=None: torch.optim.lr_scheduler
+    save_path = None: str
+
+    def __init__(self):
+        self.model = self.model.to(device)
         self.train_steps = 0
         self.val_steps = 0
         self.best_accuracy = 0
@@ -155,7 +163,7 @@ class Runner():
         #loop over each sample
         for X,y in dataloader:
             step+=1
-            self.train_steps+=1
+            #self.train_steps+=1
 
             X,y = X.to(self.device), y.to(self.device)
             outputs = self.model.forward(X)
@@ -168,19 +176,20 @@ class Runner():
             self.optimizer.zero_grad()
 
             y_pred = self.predict(outputs)
-            step_accuracy = accuracy(y_pred, y)
-            self.metrics["train"]["accuracy"] += step_accuracy
+            #step_accuracy = accuracy(y_pred, y)
+            #self.metrics["train"]["accuracy"] += step_accuracy
 
             #run scheduler per step
             if self.batch_scheduler:
                 self.batch_scheduler.step()
             
-            self.metrics["train"]["loss"] += loss
+            #self.metrics["train"]["loss"] += loss
 
             #output to tensorboard
             if self.summarywriter:
-                self.summarywriter.add_scalar("batch_loss/training", loss, self.train_steps)
-                self.summarywriter.add_scalar("batch_accuracy/training", step_accuracy, self.train_steps)
+                self.metrics_to_summarywriter(self)
+                # self.summarywriter.add_scalar("batch_loss/training", loss, self.train_steps)
+                # self.summarywriter.add_scalar("batch_accuracy/training", step_accuracy, self.train_steps)
 
             yield step, loss
 
@@ -208,13 +217,13 @@ class Runner():
                 self.val_steps+=1
 
                 X,y = X.to(self.device), y.to(self.device)
-                outputs = self.model.forward(X)
+                logits = self.model.forward(X)
 
-                y_pred = self.predict(outputs)
+                y_pred = self.predict(logits)
                 step_accuracy = accuracy(y_pred, y)
                 self.metrics["val"]["accuracy"] += step_accuracy
 
-                loss = self.criterion(outputs, y)
+                loss = self.criterion(logits, y)
                 self.metrics["val"]["loss"] += loss
 
                             #output to tensorboard
@@ -265,3 +274,51 @@ class Runner():
             #EVALUATE
             for step, loss in self.evaluate(dataloaders["val"], epoch):
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
+
+    def feed_metrics(self, outputs, y):
+        for metric in self.metrics:
+            metric(outputs, y)
+
+    def print_metrics(self):
+        for metric in self.metrics:
+            print(f"{metric.__class__.__name__}: {metric.evaluate()}")
+
+    def metrics_to_summarywriter(self, step: int, mode="train": str):
+        for metric in self.metrics:
+            self.summarywriter.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.evaluate(), step)
+
+    def evaluate(self, dataloader):
+        self.model.eval()
+        with torch.no_grad():
+            for X, y in dataloader:
+                X, y = X.to(self.device), y.to(self.device)
+                outputs = self.model(X)
+                self.feed_metrics(outputs, y)
+        self.print_metrics()
+
+class Metric(ABC):
+    def __init__(self):
+        self.cache = 0
+        self.i = 0
+
+    def __call__(self, logits, labels):
+        self.i += 1
+        self.cache += self.forward(logits.detach(), labels)
+
+    def evaluate(self):
+        result = self.cache / self.i
+        self.cache = 0
+        self.i = 0
+        return result
+    
+    @ABC.abstractmethod
+    def forward(self):
+        pass
+
+class CrossEntropyLoss(Metric):
+    def forward(self, logits, labels):
+        return torch.nn.functional.cross_entropy(logits, labels, reduction="mean")
+
+class Accuracy(Metric):
+    def forward(self, logits, labels):
+        return torch.mean((torch.argmax(logits, dim=-1) == labels).float())
