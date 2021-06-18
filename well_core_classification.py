@@ -158,19 +158,20 @@ class Runner():
             if self.batch_scheduler:
                 self.batch_scheduler.step()
 
+            self.feed_metrics(logits, y)
+            
             yield step, loss
-
+            
         #output to tensorboard
-        if self.summarywriter:
-            self.evaluate_metrics(self, logits, y)
-            self.metrics_to_summarywriter(self, epoch, "train")
+        if self.summary_writer:
+            self.evaluate_metrics()
+            self.metrics_to_summary_writer(epoch, "train")
 
         #run scheduler per epoch
         if self.epoch_scheduler:
             self.epoch_scheduler.step()
     
     def evaluate(self, dataloader, epoch):
-        self.reset_metrics("val")
         self.model.eval()
         step = 0
 
@@ -182,13 +183,14 @@ class Runner():
                 logits = self.model.forward(X)
 
                 loss = self.criterion(logits, y)
-
+                self.feed_metrics(logits, y)
                 yield step, loss
+                
 
         #output to tensorboard
-        self.evaluate_metrics(self, logits, y)
-        if self.summarywriter:
-            self.metrics_to_summarywriter(self, epoch, "eval")
+        self.evaluate_metrics()
+        if self.summary_writer:
+            self.metrics_to_summary_writer(epoch, "eval")
 
         #metrics[0] == accuracy
         print(f"Accuracy: {self.metrics[0].score*100:.2f}%")
@@ -230,13 +232,13 @@ class Runner():
         for metric in self.metrics:
             metric(logits, y)
 
-    def evaluate_metrics(self, logits, y):
+    def evaluate_metrics(self):
         for metric in self.metrics:
-            metric.evaluate(logits, y)
+            metric.evaluate()
 
-    def metrics_to_summarywriter(self, step: int, mode="train"):
+    def metrics_to_summary_writer(self, step: int, mode="train"):
         for metric in self.metrics:
-            self.summarywriter.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.score, step)
+            self.summary_writer.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.score, step)
 
 class Metric(abc.ABC):
     def __init__(self):
