@@ -163,8 +163,8 @@ class Runner():
             yield step, loss
             
         #output to tensorboard
+        self.evaluate_metrics()
         if self.summary_writer:
-            self.evaluate_metrics()
             self.metrics_to_summary_writer(epoch, "train")
 
         #run scheduler per epoch
