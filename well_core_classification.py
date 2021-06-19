@@ -9,6 +9,28 @@ import typing
 import dataclasses
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
+from shutil import copyfile
+
+
+
+#import signal
+#import logging
+
+# class DelayedKeyboardInterrupt():
+#     """Prevent a keyboard interrupt in sensitive areas of code"""
+
+#     def __enter__(self):
+#         self.signal_received = False
+#         self.old_handler = signal.signal(signal.SIGINT, self.handler)
+                
+#     def handler(self, sig, frame):
+#         self.signal_received = (sig, frame)
+#         logging.debug('SIGINT received. Delaying KeyboardInterrupt.')
+    
+#     def __exit__(self, type, value, traceback):
+#         signal.signal(signal.SIGINT, self.old_handler)
+#         if self.signal_received:
+#             self.old_handler(*self.signal_received)
 
 def matplotlib_imshow(img, one_channel=False, normalized=False):
     """plot image tensors in matplotlib"""
@@ -124,16 +146,63 @@ class Runner():
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     device: torch.device
     metrics: typing.Dict[str, typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]
-    state_save_path: str = None
     batch_scheduler: torch.optim.lr_scheduler = None
     epoch_scheduler: torch.optim.lr_scheduler = None
     summary_writer: SummaryWriter = None
-        
+    checkpoint_path: str = None #path to checkpoint every epoch
+    checkpoint_best_path: str = None #path to save best state
+    resume_path: str = None #path to file to resume training
+    debug: bool = False #only does one step per epoch
+
     def __post_init__(self):
         self.model = self.model.to(self.device)
         self.best_accuracy = 0
+        self.epoch = 0
 
-    def train(self, dataloader, epoch):
+        if self.resume_path:
+            self.resume_from_checkpoint()
+
+    def checkpoint(self, path):
+        # with DelayedKeyboardInterrupt:
+        #prevent a keyboard interrupt potentially corrupting the checkpoint
+        print(f"Saving checkpoint: {path}")
+
+        try:
+          copyfile(path, path + "_backup")
+        except:
+          print(f"Could not backup file: {path}")
+
+        checkpoint_data = {
+            'epoch': self.epoch,
+            'metrics': self.metrics,
+            'model': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'criterion': self.criterion,
+            'best_accuracy': self.best_accuracy
+        }
+
+        if self.batch_scheduler:
+          checkpoint_data["batch_scheduler"] = self.batch_scheduler.state_dict()
+        if self.epoch_scheduler:
+          checkpoint_data["epoch_scheduler"] = self.epoch_scheduler.state_dict()
+
+        torch.save(checkpoint_data, path)
+
+    def resume_from_checkpoint(self):
+        print(f"Resuming from checkpoint: {self.resume_path}")
+        checkpoint = torch.load(self.resume_path)
+        self.epoch = checkpoint['epoch']
+        self.metric = checkpoint['metrics']
+        self.model.load_state_dict(checkpoint['model'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        if "batch_scheduler" in checkpoint:
+          self.batch_scheduler.load_state_dict(checkpoint['batch_scheduler'])
+        if "epoch_scheduler" in checkpoint:
+          self.epoch_scheduler.load_state_dict(checkpoint['epoch_scheduler'])
+        self.criterion = checkpoint['criterion']
+        self.best_accuracy = checkpoint['best_accuracy']
+        
+    def train(self, dataloader):
 
         #switch to train mode
         self.model.train()
@@ -161,17 +230,19 @@ class Runner():
             self.feed_metrics(logits, y)
             
             yield step, loss
-            
+            if self.debug:
+              break
+
         #output to tensorboard
         self.evaluate_metrics()
         if self.summary_writer:
-            self.metrics_to_summary_writer(epoch, "train")
+            self.metrics_to_summary_writer(self.epoch, "train")
 
         #run scheduler per epoch
         if self.epoch_scheduler:
             self.epoch_scheduler.step()
     
-    def evaluate(self, dataloader, epoch):
+    def evaluate(self, dataloader):
         self.model.eval()
         step = 0
 
@@ -185,21 +256,21 @@ class Runner():
                 loss = self.criterion(logits, y)
                 self.feed_metrics(logits, y)
                 yield step, loss
-                
+                if self.debug:
+                  break
 
         #output to tensorboard
         self.evaluate_metrics()
         if self.summary_writer:
-            self.metrics_to_summary_writer(epoch, "eval")
+            self.metrics_to_summary_writer(self.epoch, "eval")
 
         #metrics[0] == accuracy
         print(f"Accuracy: {self.metrics['accuracy'].score*100:.2f}%")
 
         #if accuracy improves, save the model
-        if self.state_save_path and (self.metrics['accuracy'].score > self.best_accuracy):
+        if self.checkpoint_best_path and (self.metrics['accuracy'].score > self.best_accuracy):
             self.best_accuracy = self.metrics['accuracy'].score
-            torch.save(self.model.state_dict(), self.state_save_path + "best_model.pt")
-            #torch.save(self, self.state_save_path + "best_runner_state.pt")
+            self.checkpoint(self.checkpoint_best_path)
 
     def test(self, dataloader):
       self.model.eval()
@@ -219,18 +290,20 @@ class Runner():
       return all_logits
 
     def fit(self, epochs, dataloaders):
-        for epoch in range(epochs):
-            print(f"")
+        
+        for epoch in range(self.epoch, epochs):
+            self.epoch = epoch
+            
             #TRAIN
-            for step, loss in self.train(dataloaders["train"], epoch):
+            for step, loss in self.train(dataloaders["train"]):
                 print(f"EPOCH: {epoch+1} | Training Step: {step} | Loss: {loss.item():.3f}")
 
             #EVALUATE
-            for step, loss in self.evaluate(dataloaders["val"], epoch):
+            for step, loss in self.evaluate(dataloaders["val"]):
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
-
-            torch.save(self.model.state_dict(), self.state_save_path + "last_model.pt")
-            #torch.save(self, self.state_save_path + "last_runner_state.pt")
+            
+            if self.checkpoint_path:
+                self.checkpoint(self.checkpoint_path)
 
     def feed_metrics(self, logits, y):
         for _, metric in self.metrics.items():
