@@ -191,7 +191,7 @@ class Runner():
     def resume_from_checkpoint(self):
         print(f"Resuming from checkpoint: {self.resume_path}")
         checkpoint = torch.load(self.resume_path)
-        self.epoch = checkpoint['epoch']
+        self.epoch = checkpoint['epoch'] + 1
         self.metric = checkpoint['metrics']
         self.model.load_state_dict(checkpoint['model'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
