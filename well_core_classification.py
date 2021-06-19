@@ -124,7 +124,7 @@ class Runner():
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     device: torch.device
     metrics: typing.Dict[str, typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]
-    save_path: str = None
+    state_save_path: str = None
     batch_scheduler: torch.optim.lr_scheduler = None
     epoch_scheduler: torch.optim.lr_scheduler = None
     summary_writer: SummaryWriter = None
@@ -198,7 +198,8 @@ class Runner():
         #if accuracy improves, save the model
         if self.save_path and (self.metrics['accuracy'].score > self.best_accuracy):
             self.best_accuracy = self.metrics['accuracy'].score
-            torch.save(self.model.state_dict(), self.save_path)
+            torch.save(self.model.state_dict(), self.state_save_path + "best_model.pt")
+            torch.save(self, self.state_save_path + "best_runner_state.pt")
 
     def test(self, dataloader):
       self.model.eval()
@@ -227,6 +228,9 @@ class Runner():
             #EVALUATE
             for step, loss in self.evaluate(dataloaders["val"], epoch):
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
+
+            torch.save(self.model.state_dict(), self.state_save_path + "last_model.pt")
+            torch.save(self, self.state_save_path + "last_runner_state.pt")
 
     def feed_metrics(self, logits, y):
         for _, metric in self.metrics.items():
