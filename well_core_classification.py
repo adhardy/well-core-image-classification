@@ -204,19 +204,18 @@ class Runner():
       self.model.eval()
       step = 0
       test_accuracy = 0
+      all_logits = torch.tensor([])
       with torch.no_grad():
         for X,y in dataloader:
             step += 1
             X,y = X.to(self.device), y.to(self.device)
             logits = self.model.forward(X)
-
-            #test_accuracy += accuracy(torch.tensor(y_pred_step).to(self.device), y)
-
+            all_logits = torch.cat((all_logits, logits))
             self.feed_metrics(logits, y)
         
         self.evaluate_metrics()
 
-      return logits
+      return all_logits
 
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
