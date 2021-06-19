@@ -196,10 +196,10 @@ class Runner():
         print(f"Accuracy: {self.metrics['accuracy'].score*100:.2f}%")
 
         #if accuracy improves, save the model
-        if self.save_path and (self.metrics['accuracy'].score > self.best_accuracy):
+        if self.state_save_path and (self.metrics['accuracy'].score > self.best_accuracy):
             self.best_accuracy = self.metrics['accuracy'].score
             torch.save(self.model.state_dict(), self.state_save_path + "best_model.pt")
-            torch.save(self, self.state_save_path + "best_runner_state.pt")
+            #torch.save(self, self.state_save_path + "best_runner_state.pt")
 
     def test(self, dataloader):
       self.model.eval()
@@ -230,7 +230,7 @@ class Runner():
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
 
             torch.save(self.model.state_dict(), self.state_save_path + "last_model.pt")
-            torch.save(self, self.state_save_path + "last_runner_state.pt")
+            #torch.save(self, self.state_save_path + "last_runner_state.pt")
 
     def feed_metrics(self, logits, y):
         for _, metric in self.metrics.items():
