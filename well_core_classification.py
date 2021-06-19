@@ -121,9 +121,7 @@ class Runner():
     optimizer: torch.optim
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     device: torch.device
-    metrics: typing.Iterable[
-        typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
-    ]
+    metrics: typing.Dict[str, typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]
     save_path: str = None
     batch_scheduler: torch.optim.lr_scheduler = None
     epoch_scheduler: torch.optim.lr_scheduler = None
@@ -193,11 +191,11 @@ class Runner():
             self.metrics_to_summary_writer(epoch, "eval")
 
         #metrics[0] == accuracy
-        print(f"Accuracy: {self.metrics[0].score*100:.2f}%")
+        print(f"Accuracy: {self.metrics['accuracy'].score*100:.2f}%")
 
         #if accuracy improves, save the model
-        if self.save_path and (self.metrics[0].score > self.best_accuracy):
-            self.best_accuracy = self.metrics[0].score
+        if self.save_path and (self.metrics['accuracy'].score > self.best_accuracy):
+            self.best_accuracy = self.metrics['accuracy'].score
             torch.save(self.model.state_dict(), self.save_path)
 
     def test(self, dataloader):
@@ -229,16 +227,17 @@ class Runner():
                 print(f"EPOCH: {epoch+1} | Validation Step: {step} | Loss: {loss.item():.3f}")
 
     def feed_metrics(self, logits, y):
-        for metric in self.metrics:
+        for _, metric in self.metrics.items():
             metric(logits, y)
 
     def evaluate_metrics(self):
-        for metric in self.metrics:
-            metric.evaluate()
+        for metric_name, metric in self.metrics.items():
+            print()
+            metric.evaluate(metric_name)
 
     def metrics_to_summary_writer(self, step: int, mode="train"):
-        for metric in self.metrics:
-            self.summary_writer.add_scalar(f"metric.{__class__.__name__}/{mode}", metric.score, step)
+        for metric_name, metric in self.metrics.items():
+            self.summary_writer.add_scalar(f"{metric_name}/{mode}", metric.score, step)
 
 class Metric(abc.ABC):
     def __init__(self):
@@ -251,11 +250,10 @@ class Metric(abc.ABC):
         self.cache += self.forward(logits.detach(), labels)
 
     def evaluate(self):
-        score = self.cache / self.i
+        self.score = self.cache / self.i
         self.cache = 0
         self.i = 0
-        self.score = score
-        return score
+        return self.score
 
     @abc.abstractmethod
     def forward(self):
@@ -267,4 +265,4 @@ class CrossEntropyLoss(Metric):
 
 class Accuracy(Metric):
     def forward(self, logits, labels):
-        return torch.mean((torch.argmax(logits, dim=-1) == labels).float())
+        return torch.mean((torch.argmax(logits, dim=1) == labels).float())
