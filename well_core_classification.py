@@ -23,6 +23,7 @@ def matplotlib_imshow(img, one_channel=False, normalized=False):
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 def plot_confusion_matrix(conf_mat, label_names, height=500, width=500):
+    """Plot the k*k confusion matrix in plotly""" 
     fig = ff.create_annotated_heatmap(conf_mat, x=label_names, y=label_names)
     fig.update_layout(yaxis = dict(categoryorder = 'category descending'))
     fig.update_layout(xaxis = dict(categoryorder = 'category ascending'))
@@ -89,21 +90,21 @@ class CoreSlices (torch.utils.data.Dataset):
         return (depth_end + depth_start) / 2
 
 def get_weights(modes, slices):
+    """Calculate the weights for each sample, to be fed into the pytorch weighted random sampler"""
     labels = {}
     labels_cnt = {}
     labels_weights = {}
     weights = {}
-    for mode in modes:
+    for mode in modes: #train/va/test
         labels[mode] = []
 
-        # get all labels
+        # get a list of all labels
         for i in range(len(slices[mode])):
             labels[mode].append(slices[mode].get_label(i))
         
-        labels[mode] = np.sort(labels[mode]) #sort so that counts and weights are in the right index
+        labels[mode] = np.sort(labels[mode]) #sort so that counts and weights go into the right index
         labels_cnt[mode] = np.bincount(labels[mode]) #label frequency
-        #labels_cnt[mode] = labels_cnt[mode] / min(labels_cnt[mode]) #normalise, don't need to do this
-        labels_weights[mode] = 1. / labels_cnt[mode]
+        labels_weights[mode] = 1. / labels_cnt[mode] #invert so that low frequency becomes high weight
 
         #create list with a weight for each sample
         weights[mode] = []
@@ -117,6 +118,7 @@ def get_weights(modes, slices):
 
 @dataclasses.dataclass
 class Runner():
+    """ """
     model: torch.nn.Module
     optimizer: torch.optim
     criterion: typing.Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
@@ -231,9 +233,8 @@ class Runner():
             metric(logits, y)
 
     def evaluate_metrics(self):
-        for metric_name, metric in self.metrics.items():
-            print()
-            metric.evaluate(metric_name)
+        for _, metric in self.metrics.items():
+            metric.evaluate()
 
     def metrics_to_summary_writer(self, step: int, mode="train"):
         for metric_name, metric in self.metrics.items():
