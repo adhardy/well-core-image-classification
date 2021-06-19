@@ -204,7 +204,7 @@ class Runner():
       self.model.eval()
       step = 0
       test_accuracy = 0
-      all_logits = torch.tensor([])
+      all_logits = torch.tensor([]).to(self.device)
       with torch.no_grad():
         for X,y in dataloader:
             step += 1
@@ -268,6 +268,32 @@ class Accuracy(Metric):
     def forward(self, logits, labels):
         return torch.mean((torch.argmax(logits, dim=1) == labels).float())
 
-class ConfusionMatrix(Metric):
+class TPR(Metric):
     def forward(self, logits, labels):
-        return confusion_matrix(y, torch.argmax(logits, dim=1))
+        conf_mat = confusion_matrix(labels, torch.argmax(logits, dim=1))
+        condition_positive = np.sum(conf_mat, axis=1)
+        tp = np.diagonal(conf_mat).sum()
+        return tp / condition_positive
+
+class FPR(Metric):
+    def forward(self, logits, labels):
+        conf_mat = confusion_matrix(labels, torch.argmax(logits, dim=1))
+        predicted_positive = np.sum(conf_mat, axis=0)
+        tp = np.diagonal(conf_mat).sum()
+        fp = predicted_positive - np.diagonal(conf_mat).sum()
+        return fp / predicted_positive
+
+class TP_FN_FP_TN():
+  def forward(self, logits, labels):
+
+    conf_mat = confusion_matrix(labels, torch.argmax(logits.to("cpu"), dim=1))
+
+    self.condition_positive = np.sum(conf_mat, axis=1)
+    self.predicted_positive = np.sum(conf_mat, axis=0)
+
+    self.TP = np.diagonal(conf_mat)
+    self.FN = self.condition_positive - self.TP
+    self.FP = self.predicted_positive - self.TP
+    self.TN = np.sum(conf_mat) - self.condition_positive
+
+    return self.TP, self.FN, self.FP, self.TN, self.condition_positive, self.predicted_positive
