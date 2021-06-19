@@ -217,7 +217,7 @@ class Runner():
         self.evaluate_metrics()
 
       return logits
-      
+
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
             print(f"")
@@ -272,11 +272,3 @@ class Accuracy(Metric):
 class ConfusionMatrix(Metric):
     def forward(self, logits, labels):
         return confusion_matrix(y, torch.argmax(logits, dim=1))
-
-class TruePositiveRate(Metric):
-    def forward(self, logits, labels):
-        return 
-
-class FalsePositiveRate(metric):
-    def forward(self, logits, labels):
-        return 
