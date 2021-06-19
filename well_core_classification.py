@@ -211,11 +211,15 @@ class Runner():
             X,y = X.to(self.device), y.to(self.device)
             logits = self.model.forward(X)
 
-            y_pred_step = list(self.predict(logits))
+            y_pred_step = list(torch.argmax(logits, dim=1))
             y_pred += y_pred_step
-            test_accuracy += accuracy(torch.tensor(y_pred_step).to(self.device), y)
+            #test_accuracy += accuracy(torch.tensor(y_pred_step).to(self.device), y)
 
-      return y_pred, test_accuracy/step
+            self.feed_metrics(logits, y)
+        
+        self.evaluate_metrics()
+
+      return y_pred, self.metrics["accuracy"].score
 
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
