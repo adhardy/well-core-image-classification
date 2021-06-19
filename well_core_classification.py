@@ -8,7 +8,7 @@ import abc
 import typing
 import dataclasses
 from torch.utils.tensorboard import SummaryWriter
-
+from sklearn.metrics import confusion_matrix
 
 def matplotlib_imshow(img, one_channel=False, normalized=False):
     """plot image tensors in matplotlib"""
@@ -202,7 +202,6 @@ class Runner():
 
     def test(self, dataloader):
       self.model.eval()
-      y_pred = []
       step = 0
       test_accuracy = 0
       with torch.no_grad():
@@ -211,16 +210,14 @@ class Runner():
             X,y = X.to(self.device), y.to(self.device)
             logits = self.model.forward(X)
 
-            y_pred_step = list(torch.argmax(logits, dim=1))
-            y_pred += y_pred_step
             #test_accuracy += accuracy(torch.tensor(y_pred_step).to(self.device), y)
 
             self.feed_metrics(logits, y)
         
         self.evaluate_metrics()
 
-      return y_pred, self.metrics["accuracy"].score
-
+      return logits
+      
     def fit(self, epochs, dataloaders):
         for epoch in range(epochs):
             print(f"")
@@ -271,3 +268,15 @@ class CrossEntropyLoss(Metric):
 class Accuracy(Metric):
     def forward(self, logits, labels):
         return torch.mean((torch.argmax(logits, dim=1) == labels).float())
+
+class ConfusionMatrix(Metric):
+    def forward(self, logits, labels):
+        return confusion_matrix(y, torch.argmax(logits, dim=1))
+
+class TruePositiveRate(Metric):
+    def forward(self, logits, labels):
+        return 
+
+class FalsePositiveRate(metric):
+    def forward(self, logits, labels):
+        return 
