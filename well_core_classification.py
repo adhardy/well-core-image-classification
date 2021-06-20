@@ -94,6 +94,8 @@ class CoreSlices (torch.utils.data.Dataset):
         #find all the labels and store in a list
         for img in self.imgs:
             photo_ID, n_core, n_slice = os.path.splitext(os.path.basename(img))[0].split("_")
+            n_core = int(n_core)
+            n_slice = int(n_slice)
             label = int(self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]["label"])
             self.labels.append(label)
 
