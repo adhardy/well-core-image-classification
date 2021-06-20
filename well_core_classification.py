@@ -143,7 +143,7 @@ def get_weights(modes, slices):
 
         weights[mode] = torch.tensor(weights[mode])
     
-    return weights
+    return weights, labels_weights, labels_cnt
 
 @dataclasses.dataclass
 class Runner():
