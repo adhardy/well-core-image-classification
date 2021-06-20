@@ -50,7 +50,7 @@ class CoreImages():
         #still a bit broken, needs work to retrieve these properly
         return self.paths[idx]
 
-    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, verbose:int=0) -> None:
+    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, metadate_path="slice_metadata.csv",verbose:int=0) -> None:
         """extract the cores from each image, and slice the cores into slices of <slice> width"""
         self.core_slices = []
         core_left, core_right = self.core_x
@@ -61,7 +61,7 @@ class CoreImages():
                 print("Core labels:")
                 print(df_labels)
         
-        with open("data/slice_metadata.csv", "w") as f:
+        with open(metadate_path, "w") as f:
             f.write("photo_ID,n_core,n_slice,label,start,end\n")
             for core_photo in self.core_photos:
 
