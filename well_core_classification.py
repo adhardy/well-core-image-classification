@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 from PIL import Image
 import numpy as np
+import pandas as pd
 import plotly.figure_factory as ff 
 import abc
 import typing
@@ -84,9 +85,10 @@ def accuracy(y_pred, y):
 
 class CoreSlices (torch.utils.data.Dataset):
     """Dataset class for well core image slices"""
-    def __init__(self, imgs, transform):
+    def __init__(self, imgs, transform, df_metadata: pd.DataFrame):
         self.imgs = imgs
         self.transform = transform
+        self.df_metadata = df_metadata
 
     def __len__(self):
         return len(self.imgs)
@@ -95,14 +97,19 @@ class CoreSlices (torch.utils.data.Dataset):
 
         img = self.transform(Image.open(self.imgs[idx]))
 
-        #get the root name of the file (no file extension) and extract the label
-        #label = int(os.path.splitext(os.path.basename(self.imgs[idx]))[0].split("_")[-1])
         label = self.get_label(idx)
         return img, torch.tensor(label)
 
-    def get_label(self, idx):
+    def get_img_id(self, idx: int):
+        """get the root name of the file (no file extension) and extract the IDs"""
+        photo_ID, n_core, n_slice = os.path.splitext(os.path.basename(self.imgs[idx]))[0].split("_")
+        return photo_ID, int(n_core), int(n_slice) 
+
+    def get_label(self, idx: int):
         """Method to allow retrieval of label without having to download the image when it is remote"""
-        return int(os.path.splitext(os.path.basename(self.imgs[idx]))[0].split("_")[-1])
+        photo_ID, n_core, n_slice = self.get_img_id(idx)
+        label = int(self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]["label"])
+        return label
 
     def get_mid_point(self,idx):
         """Returns the depth of the mid-point of the slice"""
