@@ -60,54 +60,57 @@ class CoreImages():
             if verbose:
                 print("Core labels:")
                 print(df_labels)
-
-        for core_photo in self.core_photos:
-
-            photo_ID = os.path.splitext(os.path.basename(core_photo))[0]
-
-            if verbose > 0:
-                print(f"Processing core photo: {core_photo}")
-
-            core_paths = []
-            for n_core in range(self.cores_per_image):
-                #extract the core from the image
-                core_photo_img = Image.open(core_photo)
-                core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
-                core_path = f"{core_dir}/{photo_ID}_{n_core}.jpg"
-                core_img.save(core_path)
-                
-                #slice the core up
-                core_width, core_height = core_img.size
-                slice_left = 0
-                slice_right = self.slice_window
-                n_slice = 0
-                slice_paths = []
-                while slice_right < core_width:
-
-                    # find the label for this slice
-                    if labels:
-                        depth_cm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
-                        label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_cm)].tail(1)["type"].values)
-                        if len(label)>0:
-                            label = label[0]
-                        else:
-                            label = "unlabelled"
-
-                    #crop and save the slice
-                    slice_img = core_img.crop((slice_left,0,slice_right,core_height))
-                    slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}_{{0:05.0f}}_{{1:05.0f}}_{label}.jpg".format(self.px_to_mm(slice_left)*10,self.px_to_mm(slice_right)*10)
-                    slice_paths.append(slice_path)
-                    slice_img.save(slice_path)
-                    slice_img.close()
-
-                    # increment for next loop
-                    n_slice += 1
-                    slice_left += self.slice_step
-                    slice_right += self.slice_step
-                
-                core_paths.append([core_path, slice_paths])
-
-                core_img.close()
-                core_photo_img.close()
         
-            self.paths.append([core_photo, core_paths])
+        with open("data/slice_metadata.csv", "w") as f:
+            f.write("photo_ID,n_core,n_slice,label,start,end\n")
+            for core_photo in self.core_photos:
+
+                photo_ID = os.path.splitext(os.path.basename(core_photo))[0]
+
+                if verbose > 0:
+                    print(f"Processing core photo: {core_photo}")
+
+                core_paths = []
+                for n_core in range(self.cores_per_image):
+                    #extract the core from the image
+                    core_photo_img = Image.open(core_photo)
+                    core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
+                    core_path = f"{core_dir}/{photo_ID}_{n_core}.jpg"
+                    core_img.save(core_path)
+                    
+                    #slice the core up
+                    core_width, core_height = core_img.size
+                    slice_left = 0
+                    slice_right = self.slice_window
+                    n_slice = 0
+                    slice_paths = []
+                    while slice_right < core_width:
+
+                        # find the label for this slice
+                        if labels:
+                            depth_cm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
+                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_cm)].tail(1)["type"].values)
+                            if len(label)>0:
+                                label = label[0]
+                            else:
+                                label = "unlabelled"
+
+                        #crop and save the slice
+                        slice_img = core_img.crop((slice_left,0,slice_right,core_height))
+                        slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
+                        slice_paths.append(slice_path)
+                        slice_img.save(slice_path)
+                        slice_img.close()
+                        f.write(f"{photo_ID},{n_core},{n_slice},{label},{self.px_to_mm(slice_left):0.1f},{self.px_to_mm(slice_right):0.1f}\n")
+
+                        # increment for next loop
+                        n_slice += 1
+                        slice_left += self.slice_step
+                        slice_right += self.slice_step
+                    
+                    core_paths.append([core_path, slice_paths])
+
+                    core_img.close()
+                    core_photo_img.close()
+            
+                self.paths.append([core_photo, core_paths])
