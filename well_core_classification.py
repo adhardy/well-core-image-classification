@@ -89,6 +89,13 @@ class CoreSlices (torch.utils.data.Dataset):
         self.imgs = imgs
         self.transform = transform
         self.df_metadata = df_metadata
+        self.labels = []
+
+        #find all the labels and store in a list
+        for img in self.imgs:
+            photo_ID, n_core, n_slice = os.path.splitext(os.path.basename(img))[0].split("_")
+            label = int(self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]["label"])
+            self.labels.append(label)
 
     def __len__(self):
         return len(self.imgs)
@@ -96,20 +103,11 @@ class CoreSlices (torch.utils.data.Dataset):
     def __getitem__(self, idx):
 
         img = self.transform(Image.open(self.imgs[idx]))
-
-        label = self.get_label(idx)
-        return img, torch.tensor(label)
-
-    def get_img_id(self, idx: int):
-        """get the root name of the file (no file extension) and extract the IDs"""
-        photo_ID, n_core, n_slice = os.path.splitext(os.path.basename(self.imgs[idx]))[0].split("_")
-        return photo_ID, int(n_core), int(n_slice) 
+        return img, torch.tensor(self.labels[idx])
 
     def get_label(self, idx: int):
         """Method to allow retrieval of label without having to download the image when it is remote"""
-        photo_ID, n_core, n_slice = self.get_img_id(idx)
-        label = int(self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]["label"])
-        return label
+        return self.labels[idx]
 
     def get_mid_point(self,idx):
         """Returns the depth of the mid-point of the slice"""
