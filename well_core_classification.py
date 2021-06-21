@@ -90,33 +90,30 @@ class CoreSlices (torch.utils.data.Dataset):
         self.transform = transform
         self.df_metadata = df_metadata
         self.labels = []
+        self.metadata = []
 
         #find all the labels and store in a list
         for img in self.imgs:
             photo_ID, n_core, n_slice = os.path.splitext(os.path.basename(img))[0].split("_")
             n_core = int(n_core)
             n_slice = int(n_slice)
-            label = int(self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]["label"])
+            df_row = self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]
+            label = int(df_row["label"])
+            start = float(df_row["start"])
+            end = float(df_row["end"])
             self.labels.append(label)
+            self.metadata.append((photo_ID, n_core, n_slice, start/end))
 
     def __len__(self):
         return len(self.imgs)
     
     def __getitem__(self, idx):
-
         img = self.transform(Image.open(self.imgs[idx]))
-        return img, torch.tensor(self.labels[idx])
+        return img, torch.tensor(self.labels[idx]), self.metadata[idx]
 
     def get_label(self, idx: int):
         """Method to allow retrieval of label without having to download the image when it is remote"""
         return self.labels[idx]
-
-    def get_mid_point(self,idx):
-        """Returns the depth of the mid-point of the slice"""
-        depth_start, depth_end = os.path.splitext(os.path.basename(self.imgs[idx]))[0].split("_")[3:5]
-        depth_start = float(depth_start)/10 #/10 to convert to mm
-        depth_end = float(depth_end)/10
-        return (depth_end + depth_start) / 2
 
 def get_weights(modes, slices):
     """Calculate the weights for each sample, to be fed into the pytorch weighted random sampler"""
@@ -216,7 +213,7 @@ class Runner():
         step = 0
         
         #loop over each sample
-        for X,y in dataloader:
+        for X,y,_ in dataloader:
             step+=1
 
             X,y = X.to(self.device), y.to(self.device)
@@ -254,7 +251,7 @@ class Runner():
         step = 0
 
         with torch.no_grad():
-            for X,y in dataloader:
+            for X,y,_ in dataloader:
                 step+=1
 
                 X,y = X.to(self.device), y.to(self.device)
@@ -279,22 +276,46 @@ class Runner():
             self.best_accuracy = self.metrics['accuracy'].score
             self.checkpoint(self.checkpoint_best_path)
 
-    def test(self, dataloader):
+    def predict(self, dataloader):
       self.model.eval()
       step = 0
       test_accuracy = 0
-      all_logits = torch.tensor([]).to(self.device)
+
+      df_predictions = pd.DataFrame()
+
+      logits = torch.tensor([]).to(self.device)
+      truth = torch.tensor([])
+      photo_ID = []
+      n_core = []
+      n_slice = []
+      depth = []
+
       with torch.no_grad():
-        for X,y in dataloader:
+        for X,y,metadata in dataloader:
             step += 1
-            X,y = X.to(self.device), y.to(self.device)
-            logits = self.model.forward(X)
-            all_logits = torch.cat((all_logits, logits))
-            self.feed_metrics(logits, y)
+
+            X = X.to(self.device)
+            y = y
+            #forward pass
+            logits_batch = self.model.forward(X)
+            logits = torch.cat((logits, logits_batch))
+            truth = torch.cat((truth, y))
+
+            #get image ID info
+            photo_ID += metadata[0]
+            n_core += metadata[1].tolist()
+            n_slice += metadata[2].tolist()
+            depth += metadata[3].tolist()
         
         self.evaluate_metrics()
 
-      return all_logits
+      df_predictions = pd.DataFrame(photo_ID, columns=["photo_ID"])
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(n_core, columns=["n_core"])], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(n_slice, columns=["n_slice"])], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(depth, columns=["depth"])], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(torch.argmax(logits, dim=1).to("cpu").numpy(), columns=["prediction"])], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(truth.numpy(), columns=["truth"]).astype(int)], axis=1)
+      return df_predictions
 
     def fit(self, epochs, dataloaders):
         
