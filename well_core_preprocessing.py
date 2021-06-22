@@ -110,9 +110,9 @@ class CoreImages():
 
                         # find the label for this slice
                         if labels:
-                            depth_mm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
-                            depth_mm += (n_core+1) * self.core_x_mm + top_depth #get the depth relative to the first core in the image
-                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_mm)].tail(1)["type"].values)
+                            depth_mm_relative = self.px_to_mm(slice_left+self.slice_window/2) #depth relative to top of core, add half the window size to find the label at the midpoint of the window
+                            depth_mm = depth_mm_relative + (n_core+1) * self.core_x_mm + top_depth #get the depth relative to the first core in the image
+                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_mm_relative)].tail(1)["type"].values)
                             if len(label)>0:
                                 label = label[0]
                             else:
