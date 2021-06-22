@@ -284,6 +284,7 @@ class Runner():
       df_predictions = pd.DataFrame()
 
       logits = torch.tensor([]).to(self.device)
+      probas = torch.tensor([]).to(self.device)
       truth = torch.tensor([])
       photo_ID = []
       n_core = []
@@ -291,6 +292,8 @@ class Runner():
       depth = []
       well_name = []
       path = []
+
+      softmax = torch.nn.Softmax(dim=1)
 
       with torch.no_grad():
         for X,y,metadata in dataloader:
@@ -302,9 +305,14 @@ class Runner():
             #forward pass
             logits_batch = self.model.forward(X)
             logits = torch.cat((logits, logits_batch))
-            truth = torch.cat((truth, y))
 
-            #get image ID info
+            probas_batch = softmax(logits_batch)
+            probas_batch,_ = torch.max(probas_batch, dim=1)
+            probas = torch.cat((probas,probas_batch))
+            
+
+            #get image info
+            truth = torch.cat((truth, y))
             photo_ID += metadata[0]
             n_core += metadata[1].tolist()
             n_slice += metadata[2].tolist()
@@ -313,7 +321,9 @@ class Runner():
             path += metadata[5]
 
             self.feed_metrics(logits_batch, y)
-        
+            
+            if self.debug:
+              break
         self.evaluate_metrics()
 
       df_predictions = pd.DataFrame(photo_ID, columns=["photo_ID"])
@@ -324,6 +334,7 @@ class Runner():
       df_predictions = pd.concat([df_predictions,pd.DataFrame(depth, columns=["depth"])], axis=1)
       df_predictions = pd.concat([df_predictions,pd.DataFrame(torch.argmax(logits, dim=1).to("cpu").numpy(), columns=["prediction"])], axis=1)
       df_predictions = pd.concat([df_predictions,pd.DataFrame(truth.numpy(), columns=["truth"]).astype(int)], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(probas.to("cpu").numpy(), columns=["probablility"])], axis=1)
       return df_predictions
 
     def fit(self, epochs, dataloaders):
