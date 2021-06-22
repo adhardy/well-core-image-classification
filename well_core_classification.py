@@ -100,8 +100,9 @@ class CoreSlices (torch.utils.data.Dataset):
             df_row = self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]
             label = int(df_row["label"])
             depth = float(df_row["depth"])
+            well_name = df_row["well_name"].values[0]
             self.labels.append(label)
-            self.metadata.append((photo_ID, n_core, n_slice, depth))
+            self.metadata.append((photo_ID, n_core, n_slice, depth, well_name, img))
 
     def __len__(self):
         return len(self.imgs)
@@ -198,9 +199,9 @@ class Runner():
         self.metric = checkpoint['metrics']
         self.model.load_state_dict(checkpoint['model'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        if "batch_scheduler" in checkpoint:
+        if "batch_scheduler" in checkpoint and self.batch_scheduler:
           self.batch_scheduler.load_state_dict(checkpoint['batch_scheduler'])
-        if "epoch_scheduler" in checkpoint:
+        if "epoch_scheduler" in checkpoint and self.epoch_scheduler:
           self.epoch_scheduler.load_state_dict(checkpoint['epoch_scheduler'])
         self.criterion = checkpoint['criterion']
         self.best_accuracy = checkpoint['best_accuracy']
@@ -288,6 +289,8 @@ class Runner():
       n_core = []
       n_slice = []
       depth = []
+      well_name = []
+      path = []
 
       with torch.no_grad():
         for X,y,metadata in dataloader:
@@ -306,12 +309,16 @@ class Runner():
             n_core += metadata[1].tolist()
             n_slice += metadata[2].tolist()
             depth += metadata[3].tolist()
+            well_name += metadata[4]
+            path += metadata[5]
 
             self.feed_metrics(logits_batch, y)
         
         self.evaluate_metrics()
 
       df_predictions = pd.DataFrame(photo_ID, columns=["photo_ID"])
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(well_name, columns=["well_name"])], axis=1)
+      df_predictions = pd.concat([df_predictions,pd.DataFrame(path, columns=["path"])], axis=1)
       df_predictions = pd.concat([df_predictions,pd.DataFrame(n_core, columns=["n_core"])], axis=1)
       df_predictions = pd.concat([df_predictions,pd.DataFrame(n_slice, columns=["n_slice"])], axis=1)
       df_predictions = pd.concat([df_predictions,pd.DataFrame(depth, columns=["depth"])], axis=1)
