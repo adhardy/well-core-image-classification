@@ -57,7 +57,7 @@ class CoreImages():
 
         if labels:
             df_labels = pd.read_csv(labels)
-            if verbose:
+            if verbose == 2:
                 print("Core labels:")
                 print(df_labels)
         
