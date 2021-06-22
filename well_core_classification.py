@@ -99,10 +99,9 @@ class CoreSlices (torch.utils.data.Dataset):
             n_slice = int(n_slice)
             df_row = self.df_metadata.loc[(self.df_metadata["n_core"] == n_core) & (self.df_metadata["photo_ID"] == photo_ID) & (self.df_metadata["n_slice"] == n_slice)]
             label = int(df_row["label"])
-            start = float(df_row["start"])
-            end = float(df_row["end"])
+            depth = float(df_row["depth"])
             self.labels.append(label)
-            self.metadata.append((photo_ID, n_core, n_slice, start/end))
+            self.metadata.append((photo_ID, n_core, n_slice, depth))
 
     def __len__(self):
         return len(self.imgs)
@@ -292,6 +291,7 @@ class Runner():
 
       with torch.no_grad():
         for X,y,metadata in dataloader:
+            print(f"Step: {step}")
             step += 1
 
             X = X.to(self.device)
@@ -306,6 +306,8 @@ class Runner():
             n_core += metadata[1].tolist()
             n_slice += metadata[2].tolist()
             depth += metadata[3].tolist()
+
+            self.feed_metrics(logits_batch, y)
         
         self.evaluate_metrics()
 

@@ -2,13 +2,19 @@ import os
 from PIL import Image
 import pandas as pd
 
+def ft_to_mm(ft):
+    return ft * 304.8
+
+def m_to_mm(m):
+    return m * 1000
+
 class CoreImages():
 
     def __init__(self, core_photos:list, core_x:list, core_y:list, core_x_mm:int, slice_window:int, slice_step:int=None) -> None:
         """
         core_photos: a list of core image paths
         core_x: Tuple (x1,x2) of the x coordinates of the core trays
-        core_x_cm: length of the core in cm
+        core_x_mm: length of the core in cm
         core_y: Tuple of tuples ((y1,y2),(y1,y2),(y1,y2),...) with y coordinates for each of the cores within the image
         slice_window: width (px) to slice each core image into. If not integer divisible by the length of the core, the end of the core will be discarded
         slice_step: the interval (px) to move when taking a new slice. Minimum of 1px, defaults to value of slice_window. 
@@ -50,7 +56,7 @@ class CoreImages():
         #still a bit broken, needs work to retrieve these properly
         return self.paths[idx]
 
-    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, metadate_path="slice_metadata.csv",verbose:int=0) -> None:
+    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, slice_metadata_path:str="slice_metadata.csv", core_metadata_path:str="core_metadata.csv",verbose:int=0) -> None:
         """extract the cores from each image, and slice the cores into slices of <slice> width"""
         self.core_slices = []
         core_left, core_right = self.core_x
@@ -61,17 +67,30 @@ class CoreImages():
                 print("Core labels:")
                 print(df_labels)
         
-        with open(metadate_path, "w") as f:
-            f.write("photo_ID,n_core,n_slice,label,start,end\n")
-            for core_photo in self.core_photos:
+        df_core_metadata = pd.read_csv(core_metadata_path)
 
+        with open(slice_metadata_path, "w") as f:
+            f.write("photo_ID,n_core,n_slice,label,depth\n")
+            for core_photo in self.core_photos:
+                
                 photo_ID = os.path.splitext(os.path.basename(core_photo))[0]
+
+                top_depth = float(df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["top_depth"])
+                depth_units = df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["depth_units"].values[0]
+
+                if depth_units == "m":
+                    top_depth = m_to_mm(top_depth)
+                elif depth_units == "ft":
+                    top_depth = ft_to_mm(top_depth)
+                else:
+                    raise ValueError(f"Unrecognised depth unit {depth_units} in {photo_ID}")
 
                 if verbose > 0:
                     print(f"Processing core photo: {core_photo}")
 
                 core_paths = []
                 for n_core in range(self.cores_per_image):
+
                     #extract the core from the image
                     core_photo_img = Image.open(core_photo)
                     core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
@@ -88,8 +107,9 @@ class CoreImages():
 
                         # find the label for this slice
                         if labels:
-                            depth_cm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
-                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_cm)].tail(1)["type"].values)
+                            depth_mm = self.px_to_mm(slice_left+self.slice_window/2) #add half the window size to find the label at the midpoint of the window
+                            depth_mm += (n_core+1) * self.core_x_mm + top_depth #get the depth relative to the first core in the image
+                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_mm)].tail(1)["type"].values)
                             if len(label)>0:
                                 label = label[0]
                             else:
@@ -101,7 +121,7 @@ class CoreImages():
                         slice_paths.append(slice_path)
                         slice_img.save(slice_path)
                         slice_img.close()
-                        f.write(f"{photo_ID},{n_core},{n_slice},{label},{self.px_to_mm(slice_left):0.1f},{self.px_to_mm(slice_right):0.1f}\n")
+                        f.write(f"{photo_ID},{n_core},{n_slice},{label},{depth_mm}\n")
 
                         # increment for next loop
                         n_slice += 1
