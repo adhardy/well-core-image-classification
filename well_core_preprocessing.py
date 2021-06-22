@@ -56,7 +56,7 @@ class CoreImages():
         #still a bit broken, needs work to retrieve these properly
         return self.paths[idx]
 
-    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, slice_metadata_path:str="slice_metadata.csv", core_metadata_path:str="core_metadata.csv",verbose:int=0) -> None:
+    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, slice_metadata_path:str="slice_metadata.csv", core_metadata_path:str="core_metadata.csv",verbose:int=0, save_images:bool=True) -> None:
         """extract the cores from each image, and slice the cores into slices of <slice> width"""
         self.core_slices = []
         core_left, core_right = self.core_x
@@ -70,13 +70,14 @@ class CoreImages():
         df_core_metadata = pd.read_csv(core_metadata_path)
 
         with open(slice_metadata_path, "w") as f:
-            f.write("photo_ID,n_core,n_slice,label,depth\n")
+            f.write("well_name,photo_ID,n_core,n_slice,label,depth\n")
             for core_photo in self.core_photos:
                 
                 photo_ID = os.path.splitext(os.path.basename(core_photo))[0]
 
                 top_depth = float(df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["top_depth"])
                 depth_units = df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["depth_units"].values[0]
+                well_name  = df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["well_name"].values[0]
 
                 if depth_units == "m":
                     top_depth = m_to_mm(top_depth)
@@ -92,10 +93,12 @@ class CoreImages():
                 for n_core in range(self.cores_per_image):
 
                     #extract the core from the image
+                    
                     core_photo_img = Image.open(core_photo)
                     core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
                     core_path = f"{core_dir}/{photo_ID}_{n_core}.jpg"
-                    core_img.save(core_path)
+                    if save_images:
+                        core_img.save(core_path)
                     
                     #slice the core up
                     core_width, core_height = core_img.size
@@ -116,12 +119,14 @@ class CoreImages():
                                 label = "unlabelled"
 
                         #crop and save the slice
-                        slice_img = core_img.crop((slice_left,0,slice_right,core_height))
-                        slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
-                        slice_paths.append(slice_path)
-                        slice_img.save(slice_path)
-                        slice_img.close()
-                        f.write(f"{photo_ID},{n_core},{n_slice},{label},{depth_mm}\n")
+                        if save_images:
+                            slice_img = core_img.crop((slice_left,0,slice_right,core_height))
+                            slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
+                            slice_paths.append(slice_path)
+                            slice_img.save(slice_path)
+                            slice_img.close()
+                        
+                        f.write(f"{well_name},{photo_ID},{n_core},{n_slice},{label},{depth_mm}\n")
 
                         # increment for next loop
                         n_slice += 1
