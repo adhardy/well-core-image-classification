@@ -56,7 +56,7 @@ class CoreImages():
         #still a bit broken, needs work to retrieve these properly
         return self.paths[idx]
 
-    def slice_cores(self, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, slice_metadata_path:str="slice_metadata.csv", core_metadata_path:str="core_metadata.csv",verbose:int=0, save_images:bool=True) -> None:
+    def slice_cores(self, well_core_s3=None, core_dir:str=os.getcwd(), slice_dir:str=os.getcwd(), labels:str=None, slice_metadata_path:str="slice_metadata.csv", core_metadata_path:str="core_metadata.csv",verbose:int=0, save_local:bool=True) -> None:
         """extract the cores from each image, and slice the cores into slices of <slice> width"""
         self.core_slices = []
         core_left, core_right = self.core_x
@@ -66,7 +66,7 @@ class CoreImages():
             if verbose == 2:
                 print("Core labels:")
                 print(df_labels)
-        
+
         df_core_metadata = pd.read_csv(core_metadata_path)
 
         with open(slice_metadata_path, "w") as f:
@@ -97,7 +97,7 @@ class CoreImages():
                     core_photo_img = Image.open(core_photo)
                     core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
                     core_path = f"{core_dir}/{photo_ID}_{n_core}.jpg"
-                    if save_images:
+                    if save_local:
                         core_img.save(core_path)
                     
                     #slice the core up
@@ -119,13 +119,28 @@ class CoreImages():
                                 label = "unlabelled"
 
                         #crop and save the slice
-                        if save_images:
-                            slice_img = core_img.crop((slice_left,0,slice_right,core_height))
-                            slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
-                            slice_paths.append(slice_path)
-                            slice_img.save(slice_path)
-                            slice_img.close()
+                        slice_img = core_img.crop((slice_left,0,slice_right,core_height))
+
+                        slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
+                        slice_img.save(slice_path)
+                        slice_img.close()
                         
+                        if well_core_s3:
+                            metadata= {
+                                "box_ID":"S00066842",
+                                "n_core":f"{n_core + 1}",
+                                "n_slice":f"{n_slice}",
+                                "label":f"{label}"
+                            }
+
+                            file_name = slice_path
+                            object_name = f"{photo_ID}_{n_core}_{n_slice}"
+
+                            well_core_s3.upload_file(file_name, metadata, object_name)
+
+                        if not save_local:
+                            os.remove(slice_path)
+
                         f.write(f"{well_name},{photo_ID},{n_core},{n_slice},{label},{depth_mm}\n")
 
                         # increment for next loop
@@ -133,9 +148,6 @@ class CoreImages():
                         slice_left += self.slice_step
                         slice_right += self.slice_step
                     
-                    core_paths.append([core_path, slice_paths])
-
                     core_img.close()
                     core_photo_img.close()
             
-                self.paths.append([core_photo, core_paths])
