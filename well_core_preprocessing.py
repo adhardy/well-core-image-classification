@@ -70,21 +70,21 @@ class CoreImages():
         df_core_metadata = pd.read_csv(core_metadata_path)
 
         with open(slice_metadata_path, "w") as f:
-            f.write("well_name,photo_ID,n_core,n_slice,label,depth\n")
+            f.write("well_name,box_ID,n_core,n_slice,label,depth\n")
             for core_photo in self.core_photos:
                 
-                photo_ID = os.path.splitext(os.path.basename(core_photo))[0]
+                box_ID = os.path.splitext(os.path.basename(core_photo))[0]
 
-                top_depth = float(df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["top_depth"])
-                depth_units = df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["depth_units"].values[0]
-                well_name  = df_core_metadata[df_core_metadata["photo_ID"] == photo_ID]["well_name"].values[0]
+                top_depth = float(df_core_metadata[df_core_metadata["box_ID"] == box_ID]["top_depth"])
+                depth_units = df_core_metadata[df_core_metadata["box_ID"] == box_ID]["depth_units"].values[0]
+                well_name  = df_core_metadata[df_core_metadata["box_ID"] == box_ID]["well_name"].values[0]
 
                 if depth_units == "m":
                     top_depth = m_to_mm(top_depth)
                 elif depth_units == "ft":
                     top_depth = ft_to_mm(top_depth)
                 else:
-                    raise ValueError(f"Unrecognised depth unit {depth_units} in {photo_ID}")
+                    raise ValueError(f"Unrecognised depth unit {depth_units} in {box_ID}")
 
                 if verbose > 0:
                     print(f"Processing core photo: {core_photo}")
@@ -96,7 +96,7 @@ class CoreImages():
                     
                     core_photo_img = Image.open(core_photo)
                     core_img = core_photo_img.crop((core_left,self.core_y[n_core][0],core_right,self.core_y[n_core][1]))
-                    core_path = f"{core_dir}/{photo_ID}_{n_core}.jpg"
+                    core_path = f"{core_dir}/{box_ID}_{n_core}.jpg"
                     if save_local:
                         core_img.save(core_path)
                     
@@ -112,7 +112,7 @@ class CoreImages():
                         if labels:
                             depth_mm_relative = self.px_to_mm(slice_left+self.slice_window/2) #depth relative to top of core, add half the window size to find the label at the midpoint of the window
                             depth_mm = depth_mm_relative + (n_core+1) * self.core_x_mm + top_depth #get the depth relative to the first core in the image
-                            label = (df_labels[(df_labels["photo_ID"] == photo_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_mm_relative)].tail(1)["type"].values)
+                            label = (df_labels[(df_labels["box_ID"] == box_ID) & (df_labels["n_core"] == n_core+1) & (df_labels["length"] <= depth_mm_relative)].tail(1)["type"].values)
                             if len(label)>0:
                                 label = label[0]
                             else:
@@ -121,7 +121,7 @@ class CoreImages():
                         #crop and save the slice
                         slice_img = core_img.crop((slice_left,0,slice_right,core_height))
 
-                        slice_path = f"{slice_dir}/{photo_ID}_{n_core}_{n_slice}.jpg"
+                        slice_path = f"{slice_dir}/{box_ID}_{n_core}_{n_slice}.jpg"
                         slice_img.save(slice_path)
                         slice_img.close()
                         
@@ -134,14 +134,14 @@ class CoreImages():
                             }
 
                             file_name = slice_path
-                            object_name = f"{photo_ID}_{n_core}_{n_slice}"
+                            object_name = f"{box_ID}_{n_core}_{n_slice}"
 
                             well_core_s3.upload_file(file_name, metadata, object_name)
 
                         if not save_local:
                             os.remove(slice_path)
 
-                        f.write(f"{well_name},{photo_ID},{n_core},{n_slice},{label},{depth_mm}\n")
+                        f.write(f"{well_name},{box_ID},{n_core},{n_slice},{label},{depth_mm}\n")
 
                         # increment for next loop
                         n_slice += 1
